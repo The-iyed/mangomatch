@@ -1,0 +1,70 @@
+body{
+  cursor: grab;
+  background: linear-gradient(186deg, rgba(198,236,255,1) 37%, rgba(118,200,232,1) 100%);
+
+}
+
+.wrapper{
+  display: flex;
+  gap: 10px;
+  row-gap: 20px;
+  flex-wrap: wrap;
+  margin: 10px auto;
+
+}
+
+.wrapper > * {
+  flex: 1 1 calc((100% / 3) - 100px);
+  max-width: calc((100% / 3) - 100px); 
+}
+
+.App{
+  display: flex;
+  flex-direction: column;
+  gap: 100px;
+  height: 100vh;
+  margin-top: 10vh;
+}
+
+.wrapper-second{
+  display: flex;
+  gap: 150px;
+  margin: 10px auto;
+  justify-content: center;
+}
+
+
+.floating-fish {
+  animation: float 4s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+
+.ant-modal-content{
+  background: #005673 !important;
+
+}
+
+.ant-modal-header{
+  background: #005673 !important;
+}
+.ant-modal-title{
+  color: white !important;
+}
+
+.ant-message-notice-content{
+  background: #005673 !important;
+  color: white;
+}
