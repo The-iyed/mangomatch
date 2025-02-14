@@ -1,0 +1,27 @@
+
+services:
+  app:
+    container_name: db-sync
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 5555:5555
+      - 5007:5007
+      - 7070:7070
+    environment:
+      - GRPC_PORT=:5555
+      - HTTP_PORT=:5007
+      - MODE=DOCKER
+    volumes:
+      - ./config/config-docker.yaml:/app/config/config-docker.yaml
+      - ./ssl:/app/ssl
+    restart: always
+    networks:
+      - popups
+
+networks:
+  popups:
+    external: true
+    name: popups
+    attachable: true
