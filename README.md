@@ -1,5 +1,9 @@
 # MangoMatch 🔍
 
+<p align="center">
+  <img src="./assets/mangomatch-logo.png" alt="MangoMatch Logo" width="300">
+</p>
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/The-iyed/mangomatch.svg)](https://pkg.go.dev/github.com/The-iyed/mangomatch/pkg/mangomatch)
 [![Go Report Card](https://goreportcard.com/badge/github.com/The-iyed/mangomatch)](https://goreportcard.com/report/github.com/The-iyed/mangomatch)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
