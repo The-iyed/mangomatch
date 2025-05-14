@@ -2,6 +2,7 @@ package mangomatch
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -393,11 +394,26 @@ func getNestedValue(doc map[string]interface{}, key string) (interface{}, bool) 
 
 	// For non-leaf parts
 	for i, part := range parts {
+		// Check if the part is an array index
+		isArrayIndex := false
+		arrayIndex := -1
+		if idx, err := strconv.Atoi(part); err == nil {
+			isArrayIndex = true
+			arrayIndex = idx
+		}
+
 		if i == len(parts)-1 {
 			// Last segment - handle arrays specially
 			if currentMap, ok := current.(map[string]interface{}); ok {
 				val, exists := currentMap[part]
 				return val, exists
+			}
+
+			// Handle direct array access by index
+			if isArrayIndex && arrayIndex >= 0 {
+				if arr, ok := current.([]interface{}); ok && arrayIndex < len(arr) {
+					return arr[arrayIndex], true
+				}
 			}
 
 			// Handle array elements
@@ -414,6 +430,15 @@ func getNestedValue(doc map[string]interface{}, key string) (interface{}, bool) 
 			return nil, false
 		}
 
+		if isArrayIndex && arrayIndex >= 0 {
+			// Handle array access
+			if arr, ok := current.([]interface{}); ok && arrayIndex < len(arr) {
+				current = arr[arrayIndex]
+				continue
+			}
+			return nil, false
+		}
+
 		if currentMap, ok := current.(map[string]interface{}); ok {
 			current, ok = currentMap[part]
 			if !ok {
@@ -421,16 +446,17 @@ func getNestedValue(doc map[string]interface{}, key string) (interface{}, bool) 
 			}
 		} else if currentArray, ok := current.([]interface{}); ok {
 			// For array elements, try to find the next part in each item
+			found := false
 			for _, item := range currentArray {
 				if itemMap, ok := item.(map[string]interface{}); ok {
 					if val, exists := itemMap[part]; exists {
 						current = val
-						ok = true
+						found = true
 						break
 					}
 				}
 			}
-			if !ok {
+			if !found {
 				return nil, false
 			}
 		} else {

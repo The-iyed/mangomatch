@@ -22,7 +22,7 @@ MangoMatch is a lightweight, high-performance Go package that provides MongoDB-s
   - **Text**: `$regex`
 - **Deeply Nested Document Support**: Query nested fields using dot notation
 - **Array Field Support**: Match on array elements, including arrays of objects
-- **Thoroughly Tested**: Comprehensive test suite with 30+ use cases
+- **Extensively Tested**: Comprehensive test suite with 150+ test cases ensuring reliability and correctness
 
 ## 📦 Installation
 
@@ -240,13 +240,21 @@ query := map[string]interface{}{
 
 ## 🧪 Testing
 
+MangoMatch is thoroughly tested with over 150 test cases covering all operators and edge cases to ensure reliability and correctness.
+
+Our test suite includes:
+- Unit tests for all operators and features
+- Comprehensive tests with 120 different query patterns
+- Edge case tests for nested documents and array fields
+- Complex query tests combining multiple operators
+
 Run all tests using the provided test script:
 
 ```bash
 ./test.sh
 ```
 
-This will execute both unit tests and comprehensive test cases, providing a summary of the results.
+This will execute the full test suite and provide a summary of the results.
 
 ## 💡 Use Cases
 
