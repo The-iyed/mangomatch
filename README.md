@@ -19,6 +19,7 @@ MangoMatch is a lightweight, high-performance Go package that provides MongoDB-s
 - [Installation](#-installation)
 - [Quick Start](#-quick-start)
 - [Usage Examples](#-usage-examples)
+- [Using with BSON and MongoDB](#-using-with-bson-and-mongodb)
 - [Performance](#-performance)
 - [Comparison with Alternatives](#-comparison-with-alternatives)
 - [Testing](#-testing)
@@ -377,6 +378,127 @@ for event := range eventStream {
     }
 }
 ```
+
+## 🔄 Using with BSON and MongoDB
+
+MangoMatch works seamlessly with BSON documents retrieved from MongoDB. You can use it to perform additional filtering on data retrieved from MongoDB or to prepare and test queries before sending them to the database.
+
+### Working with BSON Documents
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"github.com/The-iyed/mangomatch/pkg/mangomatch"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+func main() {
+	// Connect to MongoDB
+	client, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb://localhost:27017"))
+	if err != nil {
+		panic(err)
+	}
+	defer client.Disconnect(context.Background())
+
+	// Get a collection
+	collection := client.Database("testdb").Collection("users")
+	
+	// Retrieve documents from MongoDB (with minimal filtering)
+	cursor, err := collection.Find(context.Background(), bson.M{"active": true})
+	if err != nil {
+		panic(err)
+	}
+	defer cursor.Close(context.Background())
+	
+	// Complex filter that will be applied in-memory
+	complexFilter := map[string]interface{}{
+		"$and": []interface{}{
+			map[string]interface{}{
+				"age": map[string]interface{}{"$gte": 25, "$lte": 40},
+			},
+			map[string]interface{}{
+				"$or": []interface{}{
+					map[string]interface{}{"subscription": "premium"},
+					map[string]interface{}{"referrals": map[string]interface{}{"$gt": 5}},
+				},
+			},
+		},
+	}
+	
+	// Process documents with MangoMatch
+	var matchedUsers []bson.M
+	for cursor.Next(context.Background()) {
+		var user bson.M
+		if err := cursor.Decode(&user); err != nil {
+			continue
+		}
+		
+		// Apply complex filtering with MangoMatch
+		if mangomatch.Match(complexFilter, user) {
+			matchedUsers = append(matchedUsers, user)
+		}
+	}
+	
+	fmt.Printf("Found %d users matching complex criteria\n", len(matchedUsers))
+}
+```
+
+### Converting Between BSON and Map
+
+```go
+// Converting BSON document to map[string]interface{}
+func bsonToMap(doc bson.M) map[string]interface{} {
+	// BSON documents (bson.M) are already map[string]interface{}, so no conversion needed
+	return doc
+}
+
+// Converting map to BSON document for MongoDB queries
+func mapToBSON(m map[string]interface{}) bson.M {
+	// Convert your MangoMatch query to BSON
+	bsonDoc := bson.M{}
+	for k, v := range m {
+		bsonDoc[k] = convertToBSONValue(v)
+	}
+	return bsonDoc
+}
+
+func convertToBSONValue(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		return mapToBSON(val)
+	case []interface{}:
+		bsonArr := make([]interface{}, len(val))
+		for i, arrVal := range val {
+			bsonArr[i] = convertToBSONValue(arrVal)
+		}
+		return bsonArr
+	default:
+		return val
+	}
+}
+```
+
+### Benefits of Using MangoMatch with MongoDB
+
+1. **Reduced Database Load**: Perform basic filtering in MongoDB and complex filtering with MangoMatch in your application
+2. **Query Testing**: Test and debug queries locally before running them on the database
+3. **Extended Functionality**: Use MangoMatch operators that might not be available in your MongoDB version
+4. **Offline Processing**: Filter cached data when the database is not available
+5. **Consistent Query Logic**: Use the same query syntax across both database and in-memory operations
+
+### Performance Considerations
+
+When working with MongoDB and MangoMatch together:
+
+1. Use MongoDB queries for initial filtering on indexed fields
+2. Use MangoMatch for complex secondary filtering that would be inefficient in the database
+3. For large datasets, paginate MongoDB results before applying MangoMatch filters
+4. Consider caching frequently accessed data for repeated MangoMatch operations
 
 ## 🚄 Performance
 
