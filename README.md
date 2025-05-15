@@ -16,13 +16,15 @@ MangoMatch is a lightweight, high-performance Go package that provides MongoDB-s
 - **Zero Dependencies**: Uses only Go's standard library for maximum compatibility
 - **Comprehensive Operator Support**:
   - **Comparison**: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`
-  - **Array**: `$in`, `$nin`
+  - **Array**: `$in`, `$nin`, `$all`, `$size`, `$elemMatch`
   - **Logical**: `$and`, `$or`, `$nor`, `$not`
   - **Existence**: `$exists`
   - **Text**: `$regex`
+  - **Element**: `$type`
+  - **Evaluation**: `$mod`
 - **Deeply Nested Document Support**: Query nested fields using dot notation
 - **Array Field Support**: Match on array elements, including arrays of objects
-- **Extensively Tested**: Comprehensive test suite with 150+ test cases ensuring reliability and correctness
+- **Extensively Tested**: Comprehensive test suite with 220+ test cases ensuring reliability and correctness
 
 ## 📦 Installation
 
@@ -134,6 +136,30 @@ query := map[string]interface{}{
 		"$nin": []interface{}{"inactive", "suspended"},
 	},
 }
+
+// Match documents where tags array contains all specified elements
+query := map[string]interface{}{
+	"tags": map[string]interface{}{
+		"$all": []interface{}{"premium", "verified"},
+	},
+}
+
+// Match documents where tags array has exactly 3 elements
+query := map[string]interface{}{
+	"tags": map[string]interface{}{
+		"$size": 3,
+	},
+}
+
+// Match documents where at least one element in the projects array matches all the criteria
+query := map[string]interface{}{
+	"projects": map[string]interface{}{
+		"$elemMatch": map[string]interface{}{
+			"status": "completed",
+			"rating": map[string]interface{}{"$gte": 4},
+		},
+	},
+}
 ```
 
 ### Logical Operators
@@ -199,6 +225,49 @@ query := map[string]interface{}{
 }
 ```
 
+### Type Operator
+
+```go
+// Match documents where name is a string
+query := map[string]interface{}{
+	"name": map[string]interface{}{"$type": "string"},
+}
+
+// Match documents where age is a number
+query := map[string]interface{}{
+	"age": map[string]interface{}{"$type": "number"},
+}
+
+// Match documents where address is an object
+query := map[string]interface{}{
+	"address": map[string]interface{}{"$type": "object"},
+}
+
+// Match documents where tags is an array
+query := map[string]interface{}{
+	"tags": map[string]interface{}{"$type": "array"},
+}
+
+// Match documents where premium is a boolean
+query := map[string]interface{}{
+	"premium": map[string]interface{}{"$type": "boolean"},
+}
+```
+
+### Modulo Operator
+
+```go
+// Match documents where age mod 5 equals 0 (age is divisible by 5)
+query := map[string]interface{}{
+	"age": map[string]interface{}{"$mod": []interface{}{5, 0}},
+}
+
+// Match documents where years mod 2 equals 1 (years is odd)
+query := map[string]interface{}{
+	"years": map[string]interface{}{"$mod": []interface{}{2, 1}},
+}
+```
+
 ### Nested Documents
 
 ```go
@@ -222,30 +291,35 @@ query := map[string]interface{}{"projects.name": "Project A"}
 ### Complex Queries
 
 ```go
-// Complex query with multiple conditions
+// Complex query with multiple conditions and operators
 query := map[string]interface{}{
 	"$and": []interface{}{
-		map[string]interface{}{"name": map[string]interface{}{"$regex": "^John"}},
-		map[string]interface{}{"age": map[string]interface{}{"$gte": 30, "$lte": 40}},
+		map[string]interface{}{"name": map[string]interface{}{"$regex": "^John", "$type": "string"}},
+		map[string]interface{}{"age": map[string]interface{}{"$gte": 30, "$lte": 40, "$mod": []interface{}{5, 0}}},
 		map[string]interface{}{
 			"$or": []interface{}{
 				map[string]interface{}{"work.years": map[string]interface{}{"$gt": 5}},
 				map[string]interface{}{"premium": true},
 			},
 		},
-		map[string]interface{}{"address.city": "New York"},
+		map[string]interface{}{"tags": map[string]interface{}{"$size": 3, "$all": []interface{}{"premium"}}},
+		map[string]interface{}{"projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"technologies": map[string]interface{}{"$all": []interface{}{"Go"}},
+			"rating": map[string]interface{}{"$gte": 4},
+		}}},
 	},
 }
 ```
 
 ## 🧪 Testing
 
-MangoMatch is thoroughly tested with over 150 test cases covering all operators and edge cases to ensure reliability and correctness.
+MangoMatch is thoroughly tested with over 220 test cases covering all operators and edge cases to ensure reliability and correctness.
 
 Our test suite includes:
 - Unit tests for all operators and features
-- Comprehensive tests with 120 different query patterns
+- Comprehensive tests with 221 different query patterns
 - Edge case tests for nested documents and array fields
+- Validation tests for input handling
 - Complex query tests combining multiple operators
 
 Run all tests using the provided test script:

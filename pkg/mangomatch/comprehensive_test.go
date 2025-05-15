@@ -8,7 +8,7 @@ func TestComprehensive(t *testing.T) {
 	// Create a comprehensive test document
 	doc := createTestDocument()
 
-	// Define 120 test cases
+	// Define 220 test cases
 	testCases := []struct {
 		name  string
 		query map[string]interface{}
@@ -247,9 +247,268 @@ func TestComprehensive(t *testing.T) {
 				map[string]interface{}{"work.projects": map[string]interface{}{"$exists": true}},
 			},
 		}, want: true},
+		// 121-130: $size operator tests
+		{name: "$size exact match for array length", query: map[string]interface{}{"scores": map[string]interface{}{"$size": 4}}, want: true},
+		{name: "$size no match for array length", query: map[string]interface{}{"scores": map[string]interface{}{"$size": 3}}, want: false},
+		{name: "$size on empty array", query: map[string]interface{}{"favorites.empty": map[string]interface{}{"$size": 0}}, want: true},
+		{name: "$size on nested array field", query: map[string]interface{}{"favorites.foods": map[string]interface{}{"$size": 3}}, want: true},
+		{name: "$size on deep nested array field", query: map[string]interface{}{"work.projects.technologies": map[string]interface{}{"$size": 3}}, want: true},
+		{name: "$size combined with $gt", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"scores": map[string]interface{}{"$size": 4}},
+			map[string]interface{}{"scores": map[string]interface{}{"$gt": 80}},
+		}}, want: true},
+		{name: "$size combined with $lt", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"favorites.foods": map[string]interface{}{"$size": 3}},
+			map[string]interface{}{"favorites.foods": map[string]interface{}{"$in": []interface{}{"pizza"}}},
+		}}, want: true},
+		{name: "$size with object field type mismatch", query: map[string]interface{}{"address": map[string]interface{}{"$size": 5}}, want: false},
+		{name: "$size with primitive field type mismatch", query: map[string]interface{}{"age": map[string]interface{}{"$size": 2}}, want: false},
+		{name: "$size with non-existent field", query: map[string]interface{}{"nonexistent": map[string]interface{}{"$size": 2}}, want: false},
+		// 131-140: $all operator tests
+		{name: "$all match all elements in array", query: map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{"premium", "verified"}}}, want: true},
+		{name: "$all no match missing element", query: map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{"premium", "nonexistent"}}}, want: false},
+		{name: "$all match single element", query: map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{"developer"}}}, want: true},
+		{name: "$all match entire array", query: map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{"premium", "verified", "developer"}}}, want: true},
+		{name: "$all match nested array", query: map[string]interface{}{"favorites.foods": map[string]interface{}{"$all": []interface{}{"pizza", "sushi"}}}, want: true},
+		{name: "$all match deep nested array", query: map[string]interface{}{"work.projects.technologies": map[string]interface{}{"$all": []interface{}{"Go"}}}, want: true},
+		{name: "$all with primitive field type mismatch", query: map[string]interface{}{"age": map[string]interface{}{"$all": []interface{}{35}}}, want: false},
+		{name: "$all with object field type mismatch", query: map[string]interface{}{"address": map[string]interface{}{"$all": []interface{}{"New York"}}}, want: false},
+		{name: "$all with empty array query", query: map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{}}}, want: true},
+		{name: "$all with non-existent field", query: map[string]interface{}{"nonexistent": map[string]interface{}{"$all": []interface{}{"value"}}}, want: false},
+		// 141-150: $elemMatch operator tests
+		{name: "$elemMatch with exact matching", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"name":   "Project A",
+			"status": "completed",
+		}}}, want: true},
+		{name: "$elemMatch with no matching element", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"name":   "Project A",
+			"status": "planning",
+		}}}, want: false},
+		{name: "$elemMatch with operator in criteria", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"rating": map[string]interface{}{"$gt": 4},
+		}}}, want: true},
+		{name: "$elemMatch with multiple operators", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"rating": map[string]interface{}{"$gte": 4, "$lt": 6},
+		}}}, want: true},
+		{name: "$elemMatch with array field", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"technologies": "Go",
+		}}}, want: true},
+		{name: "$elemMatch with nested array field", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"technologies": map[string]interface{}{"$in": []interface{}{"Go", "MongoDB"}},
+		}}}, want: true},
+		{name: "$elemMatch with primitive array", query: map[string]interface{}{"scores": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"$gt": 90,
+		}}}, want: true},
+		{name: "$elemMatch with no match in primitive array", query: map[string]interface{}{"scores": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"$gt": 100,
+		}}}, want: false},
+		{name: "$elemMatch with wrong field type", query: map[string]interface{}{"name": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"$eq": "John",
+		}}}, want: false},
+		{name: "$elemMatch with non-existent field", query: map[string]interface{}{"nonexistent": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"field": "value",
+		}}}, want: false},
+		// 151-160: $type operator tests
+		{name: "$type string match", query: map[string]interface{}{"name": map[string]interface{}{"$type": "string"}}, want: true},
+		{name: "$type string no match", query: map[string]interface{}{"age": map[string]interface{}{"$type": "string"}}, want: false},
+		{name: "$type number match", query: map[string]interface{}{"age": map[string]interface{}{"$type": "number"}}, want: true},
+		{name: "$type number no match", query: map[string]interface{}{"name": map[string]interface{}{"$type": "number"}}, want: false},
+		{name: "$type boolean match", query: map[string]interface{}{"premium": map[string]interface{}{"$type": "boolean"}}, want: true},
+		{name: "$type boolean no match", query: map[string]interface{}{"name": map[string]interface{}{"$type": "boolean"}}, want: false},
+		{name: "$type object match", query: map[string]interface{}{"address": map[string]interface{}{"$type": "object"}}, want: true},
+		{name: "$type object no match", query: map[string]interface{}{"name": map[string]interface{}{"$type": "object"}}, want: false},
+		{name: "$type array match", query: map[string]interface{}{"scores": map[string]interface{}{"$type": "array"}}, want: true},
+		{name: "$type array no match", query: map[string]interface{}{"name": map[string]interface{}{"$type": "array"}}, want: false},
+		// 161-170: $mod operator tests
+		{name: "$mod match divisible value", query: map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{5, 0}}}, want: true},
+		{name: "$mod match with remainder", query: map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{3, 2}}}, want: true},
+		{name: "$mod no match with wrong remainder", query: map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{3, 1}}}, want: false},
+		{name: "$mod match nested field", query: map[string]interface{}{"work.years": map[string]interface{}{"$mod": []interface{}{4, 0}}}, want: true},
+		{name: "$mod no match nested field", query: map[string]interface{}{"work.years": map[string]interface{}{"$mod": []interface{}{5, 0}}}, want: false},
+		{name: "$mod array element match", query: map[string]interface{}{"scores": map[string]interface{}{"$mod": []interface{}{2, 1}}}, want: true},
+		{name: "$mod array element no match", query: map[string]interface{}{"scores": map[string]interface{}{"$mod": []interface{}{11, 10}}}, want: false},
+		{name: "$mod with string field type mismatch", query: map[string]interface{}{"name": map[string]interface{}{"$mod": []interface{}{5, 0}}}, want: false},
+		{name: "$mod with object field type mismatch", query: map[string]interface{}{"address": map[string]interface{}{"$mod": []interface{}{5, 0}}}, want: false},
+		{name: "$mod with non-existent field", query: map[string]interface{}{"nonexistent": map[string]interface{}{"$mod": []interface{}{5, 0}}}, want: false},
+		// 171-180: Combined new operators tests
+		{name: "$size and $all combined", query: map[string]interface{}{"tags": map[string]interface{}{
+			"$size": 3,
+			"$all":  []interface{}{"premium", "verified"},
+		}}, want: true},
+		{name: "$type and $size combined", query: map[string]interface{}{"scores": map[string]interface{}{
+			"$type": "array",
+			"$size": 4,
+		}}, want: true},
+		{name: "$all and $elemMatch logical combination", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{"premium"}}},
+			map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{"rating": map[string]interface{}{"$gt": 4}}}},
+		}}, want: true},
+		{name: "$mod and $type combined in $or", query: map[string]interface{}{"$or": []interface{}{
+			map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{5, 0}}},
+			map[string]interface{}{"name": map[string]interface{}{"$type": "string"}},
+		}}, want: true},
+		{name: "$size and $in combined", query: map[string]interface{}{"favorites.foods": map[string]interface{}{
+			"$size": 3,
+			"$in":   []interface{}{"pizza"},
+		}}, want: true},
+		{name: "$all and $size negative test", query: map[string]interface{}{"scores": map[string]interface{}{
+			"$all":  []interface{}{100},
+			"$size": 4,
+		}}, want: false},
+		{name: "$elemMatch and $type combined", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"work.projects": map[string]interface{}{"$type": "array"}},
+			map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{"status": "completed"}}},
+		}}, want: true},
+		{name: "$mod, $gt, and $lt combined", query: map[string]interface{}{"age": map[string]interface{}{
+			"$mod": []interface{}{5, 0},
+			"$gt":  30,
+			"$lt":  40,
+		}}, want: true},
+		{name: "$type, $exists, and $ne combined", query: map[string]interface{}{"name": map[string]interface{}{
+			"$type":   "string",
+			"$exists": true,
+			"$ne":     "Jane Doe",
+		}}, want: true},
+		{name: "All new operators combined as logical OR", query: map[string]interface{}{"$or": []interface{}{
+			map[string]interface{}{"tags": map[string]interface{}{"$size": 3}},
+			map[string]interface{}{"scores": map[string]interface{}{"$all": []interface{}{85, 92}}},
+			map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{"rating": 5}}},
+			map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{5, 0}}},
+			map[string]interface{}{"address": map[string]interface{}{"$type": "object"}},
+		}}, want: true},
+		// 181-190: Complex queries with new operators
+		{name: "Complex query with $size and nested paths", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"tags": map[string]interface{}{"$size": 3}},
+			map[string]interface{}{"work.projects": map[string]interface{}{"$size": 3}},
+			map[string]interface{}{"address.location.coordinates": map[string]interface{}{"$size": 2}},
+		}}, want: true},
+		{name: "Complex query with $all and array accessors", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{"premium", "verified"}}},
+			map[string]interface{}{"work.projects.0.technologies": map[string]interface{}{"$all": []interface{}{"Go"}}},
+		}}, want: true},
+		{name: "Complex query with $elemMatch and $regex", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+				"name":   map[string]interface{}{"$regex": "^Project"},
+				"status": "completed",
+			}}},
+			map[string]interface{}{"email": map[string]interface{}{"$regex": "example\\.com$"}},
+		}}, want: true},
+		{name: "Complex query with $type and negation", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"address": map[string]interface{}{"$type": "object"}},
+			map[string]interface{}{"address.location.coordinates": map[string]interface{}{"$not": map[string]interface{}{"$type": "string"}}},
+		}}, want: true},
+		{name: "Complex query with $mod and numerical comparisons", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{5, 0}}},
+			map[string]interface{}{"work.salary": map[string]interface{}{"$gte": 100000, "$lt": 150000}},
+			map[string]interface{}{"work.years": map[string]interface{}{"$gt": 5}},
+		}}, want: true},
+		{name: "Complex query with $size, $all and logical operators", query: map[string]interface{}{"$or": []interface{}{
+			map[string]interface{}{"$and": []interface{}{
+				map[string]interface{}{"tags": map[string]interface{}{"$size": 3}},
+				map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{"premium"}}},
+			}},
+			map[string]interface{}{"$and": []interface{}{
+				map[string]interface{}{"scores": map[string]interface{}{"$size": 4}},
+				map[string]interface{}{"scores": map[string]interface{}{"$elemMatch": map[string]interface{}{"$gte": 90}}},
+			}},
+		}}, want: true},
+		{name: "Complex query with $type and existence checks", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"name": map[string]interface{}{"$type": "string", "$exists": true}},
+			map[string]interface{}{"nonexistent": map[string]interface{}{"$exists": false}},
+			map[string]interface{}{"address.city": map[string]interface{}{"$type": "string", "$eq": "New York"}},
+		}}, want: true},
+		{name: "Complex query with $elemMatch and $size", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"work.projects": map[string]interface{}{"$size": 3}},
+			map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+				"technologies": map[string]interface{}{"$size": 3},
+			}}},
+		}}, want: true},
+		{name: "Complex query with $all and $in combined", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{"premium", "verified"}}},
+			map[string]interface{}{"favorites.foods": map[string]interface{}{"$in": []interface{}{"pizza", "pasta"}}},
+		}}, want: true},
+		{name: "Complex query mixing all new operators", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"tags": map[string]interface{}{"$size": 3, "$all": []interface{}{"premium"}}},
+			map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+				"technologies": map[string]interface{}{"$type": "array"},
+				"rating":       map[string]interface{}{"$mod": []interface{}{5, 0}},
+			}}},
+		}}, want: true},
+		// 191-200: Edge cases and boundary tests for new operators
+		{name: "$size with zero value", query: map[string]interface{}{"favorites.empty": map[string]interface{}{"$size": 0}}, want: true},
+		{name: "$all with single value matching array with multiple elements", query: map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{"premium"}}}, want: true},
+		{name: "$all with empty array criteria", query: map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{}}}, want: true},
+		{name: "$elemMatch with empty criteria", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{}}}, want: true},
+		{name: "$elemMatch with null value in criteria", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"nullField": nil,
+		}}}, want: false},
+		{name: "$type with array containing mixed types", query: map[string]interface{}{"mixed": map[string]interface{}{"$type": "array"}}, want: true},
+		{name: "$mod with zero as divisor", query: map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{0, 0}}}, want: false},
+		{name: "$mod with negative divisor", query: map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{-5, 0}}}, want: false},
+		{name: "$mod with negative remainder", query: map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{5, -5}}}, want: false},
+		{name: "$size, $all, $elemMatch, $type, and $mod in one query", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"tags": map[string]interface{}{"$size": 3, "$all": []interface{}{"premium"}}},
+			map[string]interface{}{"scores": map[string]interface{}{"$type": "array", "$elemMatch": map[string]interface{}{"$mod": []interface{}{2, 0}}}},
+		}}, want: true},
+		// 201-210: Validation and error handling tests
+		{name: "$size with non-numeric value", query: map[string]interface{}{"tags": map[string]interface{}{"$size": "3"}}, want: false},
+		{name: "$size with negative value", query: map[string]interface{}{"tags": map[string]interface{}{"$size": -1}}, want: false},
+		{name: "$all with non-array query value", query: map[string]interface{}{"tags": map[string]interface{}{"$all": "premium"}}, want: false},
+		{name: "$elemMatch with non-object criteria", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": "Project A"}}, want: false},
+		{name: "$type with invalid type string", query: map[string]interface{}{"name": map[string]interface{}{"$type": "invalidType"}}, want: false},
+		{name: "$mod with non-array value", query: map[string]interface{}{"age": map[string]interface{}{"$mod": 5}}, want: false},
+		{name: "$mod with incomplete array", query: map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{5}}}, want: false},
+		{name: "$mod with too many elements", query: map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{5, 0, 1}}}, want: false},
+		{name: "$mod with non-numeric divisor", query: map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{"5", 0}}}, want: false},
+		{name: "$mod with non-numeric remainder", query: map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{5, "0"}}}, want: false},
+		// 211-220: Document-specific tests with new operators
+		{name: "$size on favorites.foods array", query: map[string]interface{}{"favorites.foods": map[string]interface{}{"$size": 3}}, want: true},
+		{name: "$all on work.projects.technologies array", query: map[string]interface{}{"work.projects.0.technologies": map[string]interface{}{"$all": []interface{}{"Go", "MongoDB"}}}, want: true},
+		{name: "$elemMatch on work.projects with specific technologies", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"technologies": map[string]interface{}{"$all": []interface{}{"Go", "MongoDB"}},
+		}}}, want: true},
+		{name: "$type check on each address field", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"address.street": map[string]interface{}{"$type": "string"}},
+			map[string]interface{}{"address.city": map[string]interface{}{"$type": "string"}},
+			map[string]interface{}{"address.zip": map[string]interface{}{"$type": "string"}},
+			map[string]interface{}{"address.location": map[string]interface{}{"$type": "object"}},
+		}}, want: true},
+		{name: "$mod on both age and work years", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{5, 0}}},
+			map[string]interface{}{"work.years": map[string]interface{}{"$mod": []interface{}{2, 0}}},
+		}}, want: true},
+		{name: "$size check on all arrays in document", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"tags": map[string]interface{}{"$size": 3}},
+			map[string]interface{}{"scores": map[string]interface{}{"$size": 4}},
+			map[string]interface{}{"favorites.foods": map[string]interface{}{"$size": 3}},
+			map[string]interface{}{"work.projects": map[string]interface{}{"$size": 3}},
+		}}, want: true},
+		{name: "$elemMatch with $size on nested array", query: map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+			"technologies": map[string]interface{}{"$size": 3},
+		}}}, want: true},
+		{name: "$all with regex patterns", query: map[string]interface{}{"tags": map[string]interface{}{"$all": []interface{}{
+			map[string]interface{}{"$regex": "^pre"},
+			map[string]interface{}{"$regex": "^ver"},
+		}}}, want: false}, // Note: We don't support regex in $all yet
+		{name: "$type combined with $regex for string", query: map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"email": map[string]interface{}{"$type": "string"}},
+			map[string]interface{}{"email": map[string]interface{}{"$regex": "example\\.com$"}},
+		}}, want: true},
+		{name: "Super complex query with all new operators", query: map[string]interface{}{
+			"$and": []interface{}{
+				map[string]interface{}{"name": map[string]interface{}{"$type": "string", "$regex": "^J"}},
+				map[string]interface{}{"age": map[string]interface{}{"$mod": []interface{}{5, 0}}},
+				map[string]interface{}{"tags": map[string]interface{}{"$size": 3, "$all": []interface{}{"premium"}}},
+				map[string]interface{}{"work.projects": map[string]interface{}{"$elemMatch": map[string]interface{}{
+					"technologies": map[string]interface{}{"$size": 3, "$all": []interface{}{"Go"}},
+					"rating":       map[string]interface{}{"$gte": 4},
+				}}},
+				map[string]interface{}{"scores": map[string]interface{}{"$type": "array", "$elemMatch": map[string]interface{}{"$gt": 90}}},
+			},
+		}, want: true},
 	}
 
-	// Run all 120 test cases
+	// Run all 220 test cases
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := Match(tc.query, doc); got != tc.want {
@@ -268,10 +527,12 @@ func createTestDocument() map[string]interface{} {
 		"premium": true,
 		"scores":  []interface{}{85, 92, 78, 94},
 		"tags":    []interface{}{"premium", "verified", "developer"},
+		"mixed":   []interface{}{"string", 42, true, map[string]interface{}{"key": "value"}},
 		"favorites": map[string]interface{}{
 			"color":  "blue",
 			"number": 7,
 			"foods":  []interface{}{"pizza", "sushi", "pasta"},
+			"empty":  []interface{}{},
 		},
 		"address": map[string]interface{}{
 			"street":  "123 Main St",

@@ -136,6 +136,26 @@ func evaluateOperators(operators map[string]interface{}, docValue interface{}) b
 			if !evaluateRegex(val, docValue) {
 				return false
 			}
+		case "$size":
+			if !evaluateSize(val, docValue) {
+				return false
+			}
+		case "$all":
+			if !evaluateAll(val, docValue) {
+				return false
+			}
+		case "$elemMatch":
+			if !evaluateElemMatch(val, docValue) {
+				return false
+			}
+		case "$type":
+			if !evaluateType(val, docValue) {
+				return false
+			}
+		case "$mod":
+			if !evaluateMod(val, docValue) {
+				return false
+			}
 		default:
 			return false
 		}
@@ -465,4 +485,244 @@ func getNestedValue(doc map[string]interface{}, key string) (interface{}, bool) 
 	}
 
 	return current, true
+}
+
+// evaluateSize checks if an array has exactly the specified number of elements
+func evaluateSize(queryValue interface{}, docValue interface{}) bool {
+	sizeVal, ok := queryValue.(int)
+	if !ok {
+		// Try to convert from float64 which is the default number type in JSON
+		if floatVal, floatOk := queryValue.(float64); floatOk {
+			sizeVal = int(floatVal)
+		} else {
+			return false
+		}
+	}
+
+	// Check if docValue is an array
+	if arr, ok := docValue.([]interface{}); ok {
+		return len(arr) == sizeVal
+	}
+
+	return false
+}
+
+// evaluateAll checks if an array contains all the specified elements
+func evaluateAll(queryValue interface{}, docValue interface{}) bool {
+	values, ok := queryValue.([]interface{})
+	if !ok {
+		return false
+	}
+
+	// Check if docValue is an array
+	docArray, ok := docValue.([]interface{})
+	if !ok {
+		return false
+	}
+
+	// Check that each value in the query exists in the document array
+	for _, queryVal := range values {
+		found := false
+		for _, docVal := range docArray {
+			if compareEqual(queryVal, docVal) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+// evaluateElemMatch checks if at least one element in an array matches all the specified criteria
+func evaluateElemMatch(queryValue interface{}, docValue interface{}) bool {
+	criteria, ok := queryValue.(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	// Check if docValue is an array
+	docArray, ok := docValue.([]interface{})
+	if !ok {
+		return false
+	}
+
+	// Check each element of the array against the criteria
+	for _, item := range docArray {
+		// If the item is a map, check if it matches all criteria
+		if itemMap, ok := item.(map[string]interface{}); ok {
+			allMatch := true
+			for k, v := range criteria {
+				// Handle operators directly applied to the document
+				if strings.HasPrefix(k, "$") {
+					// This is an operator applied directly to the array element
+					if !evaluateOperators(map[string]interface{}{k: v}, item) {
+						allMatch = false
+						break
+					}
+				} else {
+					// Check if the field exists and matches
+					fieldValue, exists := itemMap[k]
+					if !exists {
+						allMatch = false
+						break
+					}
+
+					// Check if the value matches
+					if valueMap, ok := v.(map[string]interface{}); ok {
+						// This is a query with operators
+						if !evaluateOperators(valueMap, fieldValue) {
+							allMatch = false
+							break
+						}
+					} else {
+						// Handle case where field value is an array and the query is looking for a direct match
+						if fieldArray, isArray := fieldValue.([]interface{}); isArray {
+							found := false
+							for _, arrayItem := range fieldArray {
+								if compareEqual(v, arrayItem) {
+									found = true
+									break
+								}
+							}
+							if !found {
+								allMatch = false
+								break
+							}
+						} else {
+							// This is a direct value comparison
+							if !compareEqual(v, fieldValue) {
+								allMatch = false
+								break
+							}
+						}
+					}
+				}
+			}
+			if allMatch {
+				return true
+			}
+		} else {
+			// For primitive values, check if they match all operators
+			allOperators := true
+			for k := range criteria {
+				if !strings.HasPrefix(k, "$") {
+					allOperators = false
+					break
+				}
+			}
+
+			if allOperators && evaluateOperators(criteria, item) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// evaluateType checks if a value is of the specified type
+func evaluateType(queryValue interface{}, docValue interface{}) bool {
+	typeStr, ok := queryValue.(string)
+	if !ok {
+		return false
+	}
+
+	switch typeStr {
+	case "string":
+		_, ok := docValue.(string)
+		return ok
+	case "number":
+		_, ok1 := docValue.(int)
+		_, ok2 := docValue.(float64)
+		return ok1 || ok2
+	case "boolean":
+		_, ok := docValue.(bool)
+		return ok
+	case "object":
+		_, ok := docValue.(map[string]interface{})
+		return ok
+	case "array":
+		_, ok := docValue.([]interface{})
+		return ok
+	case "null":
+		return docValue == nil
+	default:
+		return false
+	}
+}
+
+// evaluateMod checks if the modulo operation on a number matches the specified criteria
+func evaluateMod(queryValue interface{}, docValue interface{}) bool {
+	// The $mod operator expects an array with exactly two elements: [divisor, remainder]
+	modParams, ok := queryValue.([]interface{})
+	if !ok || len(modParams) != 2 {
+		return false
+	}
+
+	// Extract divisor and remainder
+	var divisor, remainder int
+
+	// Handle divisor
+	switch d := modParams[0].(type) {
+	case int:
+		divisor = d
+	case float64:
+		divisor = int(d)
+	default:
+		return false
+	}
+
+	// Handle remainder
+	switch r := modParams[1].(type) {
+	case int:
+		remainder = r
+	case float64:
+		remainder = int(r)
+	default:
+		return false
+	}
+
+	// Ensure divisor is not zero or negative to prevent division by zero or negative divisors
+	if divisor <= 0 {
+		return false
+	}
+
+	// Get the document value as an integer
+	var docInt int
+	switch dv := docValue.(type) {
+	case int:
+		docInt = dv
+	case float64:
+		docInt = int(dv)
+	default:
+		// If the document value is an array, check if any element matches
+		if docArray, ok := docValue.([]interface{}); ok {
+			// For arrays, if any element matches the modulo condition, return true
+			for _, item := range docArray {
+				// Get the item value as an integer
+				var itemInt int
+				switch iv := item.(type) {
+				case int:
+					itemInt = iv
+				case float64:
+					itemInt = int(iv)
+				default:
+					continue // Skip non-numeric values
+				}
+
+				// If we find a match, return true
+				if itemInt%divisor == remainder {
+					return true
+				}
+			}
+			return false
+		}
+		return false
+	}
+
+	// Perform the modulo operation and check if the remainder matches
+	return docInt%divisor == remainder
 }
