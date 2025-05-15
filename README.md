@@ -29,6 +29,7 @@ MangoMatch is a lightweight, high-performance Go package that provides MongoDB-s
 - [Roadmap](#-roadmap)
 - [License](#-license)
 - [Author](#-author)
+- [Acknowledgments](#-acknowledgments)
 
 ## 🌟 Features
 
@@ -36,6 +37,7 @@ MangoMatch is a lightweight, high-performance Go package that provides MongoDB-s
 - **Zero Dependencies**: Uses only Go's standard library for maximum compatibility
 - **High Performance**: Optimized for speed and low memory usage
 - **Type Safety**: Proper type handling across different Go types
+- **Native BSON Support**: Direct compatibility with MongoDB's BSON documents using the optional MongoDB driver
 - **Comprehensive Operator Support**:
   - **Comparison**: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`
   - **Array**: `$in`, `$nin`, `$all`, `$size`, `$elemMatch`
@@ -383,7 +385,12 @@ for event := range eventStream {
 
 MangoMatch works seamlessly with BSON documents retrieved from MongoDB. You can use it to perform additional filtering on data retrieved from MongoDB or to prepare and test queries before sending them to the database.
 
-### Working with BSON Documents
+### Using the Built-in BSON Conversion Functions
+
+MangoMatch provides two dedicated functions for working with BSON documents:
+
+1. `ConvertBSON` - Converts BSON types to standard Go types
+2. `MatchBSON` - A convenience function that directly matches BSON documents
 
 ```go
 package main
@@ -398,54 +405,82 @@ import (
 )
 
 func main() {
-	// Connect to MongoDB
-	client, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb://localhost:27017"))
-	if err != nil {
-		panic(err)
+	// Create BSON documents and queries
+	bsonDoc := bson.M{
+		"name": "John Doe",
+		"age": 35,
+		"status": "active",
+		"tags": bson.A{"premium", "verified"},
 	}
-	defer client.Disconnect(context.Background())
+	
+	bsonQuery := bson.M{
+		"age": bson.M{"$gt": 30},
+		"tags": "premium",
+	}
+	
+	// Method 1: Use ConvertBSON to convert BSON to Go types
+	query := mangomatch.ConvertBSON(bsonQuery).(map[string]interface{})
+	doc := mangomatch.ConvertBSON(bsonDoc).(map[string]interface{})
+	result1 := mangomatch.Match(query, doc)
+	
+	// Method 2: Use MatchBSON for direct matching of BSON documents
+	result2 := mangomatch.MatchBSON(bsonQuery, bsonDoc)
+	
+	fmt.Printf("Match result: %v\n", result1) // true
+	fmt.Printf("MatchBSON result: %v\n", result2) // true
+}
+```
 
-	// Get a collection
-	collection := client.Database("testdb").Collection("users")
-	
-	// Retrieve documents from MongoDB (with minimal filtering)
-	cursor, err := collection.Find(context.Background(), bson.M{"active": true})
-	if err != nil {
-		panic(err)
-	}
-	defer cursor.Close(context.Background())
-	
-	// Complex filter that will be applied in-memory
-	complexFilter := map[string]interface{}{
-		"$and": []interface{}{
-			map[string]interface{}{
-				"age": map[string]interface{}{"$gte": 25, "$lte": 40},
-			},
-			map[string]interface{}{
-				"$or": []interface{}{
-					map[string]interface{}{"subscription": "premium"},
-					map[string]interface{}{"referrals": map[string]interface{}{"$gt": 5}},
-				},
+### Working with BSON Documents from MongoDB
+
+```go
+// Connect to MongoDB
+client, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb://localhost:27017"))
+if err != nil {
+	panic(err)
+}
+defer client.Disconnect(context.Background())
+
+// Get a collection
+collection := client.Database("testdb").Collection("users")
+
+// Retrieve documents from MongoDB (with minimal filtering)
+cursor, err := collection.Find(context.Background(), bson.M{"active": true})
+if err != nil {
+	panic(err)
+}
+defer cursor.Close(context.Background())
+
+// Complex filter that will be applied in-memory
+complexFilter := map[string]interface{}{
+	"$and": []interface{}{
+		map[string]interface{}{
+			"age": map[string]interface{}{"$gte": 25, "$lte": 40},
+		},
+		map[string]interface{}{
+			"$or": []interface{}{
+				map[string]interface{}{"subscription": "premium"},
+				map[string]interface{}{"referrals": map[string]interface{}{"$gt": 5}},
 			},
 		},
-	}
-	
-	// Process documents with MangoMatch
-	var matchedUsers []bson.M
-	for cursor.Next(context.Background()) {
-		var user bson.M
-		if err := cursor.Decode(&user); err != nil {
-			continue
-		}
-		
-		// Apply complex filtering with MangoMatch
-		if mangomatch.Match(complexFilter, user) {
-			matchedUsers = append(matchedUsers, user)
-		}
-	}
-	
-	fmt.Printf("Found %d users matching complex criteria\n", len(matchedUsers))
+	},
 }
+
+// Process documents with MangoMatch
+var matchedUsers []bson.M
+for cursor.Next(context.Background()) {
+	var user bson.M
+	if err := cursor.Decode(&user); err != nil {
+		continue
+	}
+	
+	// Apply complex filtering with MangoMatch
+	if mangomatch.Match(complexFilter, user) {
+		matchedUsers = append(matchedUsers, user)
+	}
+}
+
+fmt.Printf("Found %d users matching complex criteria\n", len(matchedUsers))
 ```
 
 ### Converting Between BSON and Map
