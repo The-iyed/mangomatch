@@ -29,6 +29,33 @@ func ConvertBSON(value interface{}) interface{} {
 	}
 }
 
+func MapBSON(value interface{}) interface{} {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		result := bson.M{}
+		for key, val := range v {
+			result[key] = MapBSON(val)
+		}
+		return result
+	case []interface{}:
+		result := bson.A{}
+		for _, item := range v {
+			result = append(result, MapBSON(item))
+		}
+		return result
+	case map[interface{}]interface{}:
+		result := bson.M{}
+		for key, val := range v {
+			if k, ok := key.(string); ok {
+				result[k] = MapBSON(val)
+			}
+		}
+		return result
+	default:
+		return v
+	}
+}
+
 func MatchBSON(query, doc interface{}) bool {
 	goQuery, ok := ConvertBSON(query).(map[string]interface{})
 	if !ok {
