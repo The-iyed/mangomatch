@@ -69,3 +69,13 @@ func MatchBSON(query, doc interface{}) bool {
 
 	return Match(goQuery, goDoc)
 }
+
+func StructToBsonMap(data interface{}) (map[string]interface{}, error) {
+	bsonBytes, err := bson.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]interface{}
+	err = bson.Unmarshal(bsonBytes, &out)
+	return out, err
+}
