@@ -18,12 +18,33 @@ MangoMatch is a lightweight, high-performance Go package that provides MongoDB-s
 - [Features](#-features)
 - [Installation](#-installation)
 - [Quick Start](#-quick-start)
+- [Data Types & Use Cases](#-data-types--use-cases)
+  - [Data Format Support](#data-format-support)
+  - [Quick Reference](#quick-reference)
+  - [Working with Maps](#working-with-maps)
+  - [Working with Structs](#working-with-structs)
+  - [Working with BSON](#working-with-bson)
+  - [Multiple Data Sources](#multiple-data-sources)
 - [Usage Examples](#-usage-examples)
 - [Using with BSON and MongoDB](#-using-with-bson-and-mongodb)
+- [Core Functions](#-core-functions)
+  - [Match](#match)
+  - [ConvertBSON](#convertbson)
+  - [MatchBSON](#matchbson)
+  - [StructToBsonMap](#structtobsonmap)
+  - [MapBSON](#mapbson)
+- [Complete API Reference](#-complete-api-reference)
+- [Data Flow Diagram](#-data-flow-diagram)
+- [Complete BSON Integration Example](#-complete-bson-integration-example)
 - [Performance](#-performance)
 - [Comparison with Alternatives](#-comparison-with-alternatives)
 - [Testing](#-testing)
 - [Use Cases](#-use-cases)
+- [Integration Scenarios](#-integration-scenarios)
+  - [API Filtering](#api-filtering)
+  - [Database Caching](#database-caching)
+  - [Event Processing](#event-processing)
+  - [GraphQL Resolvers](#graphql-resolvers)
 - [FAQ](#-frequently-asked-questions)
 - [Contributing](#-contributing)
 - [Roadmap](#-roadmap)
@@ -34,10 +55,11 @@ MangoMatch is a lightweight, high-performance Go package that provides MongoDB-s
 ## 🌟 Features
 
 - **MongoDB-style Query Evaluation**: Evaluate MongoDB queries against in-memory Go objects
-- **Zero Dependencies**: Uses only Go's standard library for maximum compatibility
+- **Zero Dependencies**: Uses only Go's standard library for maximum compatibility (MongoDB driver is optional)
 - **High Performance**: Optimized for speed and low memory usage
 - **Type Safety**: Proper type handling across different Go types
 - **Native BSON Support**: Direct compatibility with MongoDB's BSON documents using the optional MongoDB driver
+- **Struct Support**: Built-in functions to convert Go structs to compatible maps
 - **Comprehensive Operator Support**:
   - **Comparison**: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`
   - **Array**: `$in`, `$nin`, `$all`, `$size`, `$elemMatch`
@@ -117,6 +139,334 @@ func main() {
 		"tags": "premium",
 	}
 	fmt.Println("Has premium tag:", mangomatch.Match(query4, doc)) // true
+}
+```
+
+## 📊 Data Types & Use Cases
+
+MangoMatch is designed to work with different data types and scenarios. Here's how to use it in various contexts:
+
+### Data Format Support
+
+| Data Format | Support | Conversion Required |
+|-------------|---------|---------------------|
+| Go Maps (`map[string]interface{}`) | ✅ Direct | None - Native support |
+| Go Structs | ✅ Supported | Convert to map via `StructToBsonMap` or JSON marshal/unmarshal |
+| BSON Documents (`bson.M`, `bson.D`) | ✅ Supported | Use `ConvertBSON` or `MatchBSON` |
+| JSON String | ✅ Supported | Unmarshal to `map[string]interface{}` |
+| MongoDB Results | ✅ Supported | Direct with `MatchBSON` or convert with `ConvertBSON` |
+| Custom Types | ✅ Supported | Implement conversion to `map[string]interface{}` |
+
+### Quick Reference
+
+```go
+// Basic matching with maps
+result := mangomatch.Match(query, document)
+
+// Working with BSON
+result := mangomatch.MatchBSON(bsonQuery, bsonDocument)
+
+// Converting BSON to maps
+goMap := mangomatch.ConvertBSON(bsonDoc).(map[string]interface{})
+
+// Converting maps to BSON
+bsonDoc := mangomatch.MapBSON(goMap)
+
+// Converting structs to maps (requires MongoDB driver)
+structMap, err := mangomatch.StructToBsonMap(myStruct)
+```
+
+### Working with Maps
+
+The most straightforward way to use MangoMatch is with Go maps:
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/The-iyed/mangomatch/pkg/mangomatch"
+)
+
+func main() {
+	// Data as a map
+	user := map[string]interface{}{
+		"name": "Jane Smith",
+		"age":  28,
+		"skills": []interface{}{
+			"Go", "Python", "JavaScript",
+		},
+		"contact": map[string]interface{}{
+			"email": "jane@example.com",
+			"phone": "555-1234",
+		},
+	}
+
+	// Query
+	query := map[string]interface{}{
+		"age": map[string]interface{}{
+			"$gt": 25,
+		},
+		"skills": "Go",
+	}
+
+	// Match
+	if mangomatch.Match(query, user) {
+		fmt.Println("User matches the criteria")
+	}
+}
+```
+
+### Working with Structs
+
+MangoMatch can also work with Go structs after converting them to maps:
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/The-iyed/mangomatch/pkg/mangomatch"
+)
+
+// User represents a user in the system
+type User struct {
+	Name    string   `json:"name"`
+	Age     int      `json:"age"`
+	Skills  []string `json:"skills"`
+	Contact Contact  `json:"contact"`
+}
+
+// Contact information
+type Contact struct {
+	Email string `json:"email"`
+	Phone string `json:"phone"`
+}
+
+func main() {
+	// Create a struct
+	user := User{
+		Name: "Jane Smith",
+		Age:  28,
+		Skills: []string{
+			"Go", "Python", "JavaScript",
+		},
+		Contact: Contact{
+			Email: "jane@example.com",
+			Phone: "555-1234",
+		},
+	}
+
+	// Query
+	query := map[string]interface{}{
+		"age": map[string]interface{}{
+			"$gt": 25,
+		},
+		"skills": "Go",
+	}
+
+	// Convert struct to map using StructToBsonMap
+	// Note: This requires the MongoDB driver
+	userMap, err := mangomatch.StructToBsonMap(user)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	// Match
+	if mangomatch.Match(query, userMap) {
+		fmt.Println("User matches the criteria")
+	}
+}
+```
+
+The `StructToBsonMap` function uses MongoDB's BSON marshaling to properly convert Go structs to maps, preserving all field tags and handling special types correctly:
+
+```go
+// StructToBsonMap converts a Go struct to a map[string]interface{} 
+// using MongoDB's BSON marshaling
+func StructToBsonMap(data interface{}) (map[string]interface{}, error) {
+	bsonBytes, err := bson.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	var out map[string]interface{}
+	err = bson.Unmarshal(bsonBytes, &out)
+	return out, err
+}
+```
+
+Alternatively, you can use encoding/json to convert structs to maps:
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"github.com/The-iyed/mangomatch/pkg/mangomatch"
+)
+
+// User represents a user in the system
+type User struct {
+	Name    string   `json:"name"`
+	Age     int      `json:"age"`
+	Skills  []string `json:"skills"`
+	Contact Contact  `json:"contact"`
+}
+
+// Contact information
+type Contact struct {
+	Email string `json:"email"`
+	Phone string `json:"phone"`
+}
+
+func main() {
+	// Create a struct
+	user := User{
+		Name: "Jane Smith",
+		Age:  28,
+		Skills: []string{
+			"Go", "Python", "JavaScript",
+		},
+		Contact: Contact{
+			Email: "jane@example.com",
+			Phone: "555-1234",
+		},
+	}
+
+	// Convert struct to map using JSON marshaling
+	jsonBytes, _ := json.Marshal(user)
+	var userMap map[string]interface{}
+	json.Unmarshal(jsonBytes, &userMap)
+
+	// Query
+	query := map[string]interface{}{
+		"age": map[string]interface{}{
+			"$gt": 25,
+		},
+		"skills": "Go",
+	}
+
+	// Match
+	if mangomatch.Match(query, userMap) {
+		fmt.Println("User matches the criteria")
+	}
+}
+```
+
+### Working with BSON
+
+MangoMatch provides built-in support for MongoDB BSON documents:
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/The-iyed/mangomatch/pkg/mangomatch"
+	"go.mongodb.org/mongo-driver/bson"
+)
+
+func main() {
+	// Data as BSON
+	bsonUser := bson.M{
+		"name": "Jane Smith",
+		"age":  28,
+		"skills": bson.A{"premium", "verified"},
+		"contact": bson.M{
+			"email": "jane@example.com",
+			"phone": "555-1234",
+		},
+	}
+
+	// Query as BSON
+	bsonQuery := bson.M{
+		"age": bson.M{"$gt": 25},
+		"skills": "premium",
+	}
+
+	// Method 1: Use MatchBSON for direct matching
+	result1 := mangomatch.MatchBSON(bsonQuery, bsonUser)
+	fmt.Println("BSON direct match:", result1)
+
+	// Method 2: Convert to Go types first
+	goQuery := mangomatch.ConvertBSON(bsonQuery).(map[string]interface{})
+	goData := mangomatch.ConvertBSON(bsonUser).(map[string]interface{})
+	result2 := mangomatch.Match(goQuery, goData)
+	fmt.Println("Converted match:", result2)
+
+	// Method 3: Convert Go types to BSON
+	goMap := map[string]interface{}{
+		"age": map[string]interface{}{
+			"$gt": 25,
+		},
+		"skills": "premium",
+	}
+	bsonFromGo := mangomatch.MapBSON(goMap)
+	fmt.Printf("Go map converted to BSON type: %T\n", bsonFromGo)
+}
+```
+
+### Multiple Data Sources
+
+You can combine data from different sources and filter it with MangoMatch:
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"github.com/The-iyed/mangomatch/pkg/mangomatch"
+	"go.mongodb.org/mongo-driver/bson"
+)
+
+type User struct {
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Age    int      `json:"age"`
+	Skills []string `json:"skills"`
+}
+
+func main() {
+	// Data from different sources
+	jsonData := `{"id":"user1","name":"John Doe","age":32,"skills":["Go","Java"]}`
+	bsonData := bson.M{"id": "user2", "name": "Jane Smith", "age": 28, "skills": bson.A{"Go", "Python"}}
+	structData := User{ID: "user3", Name: "Bob Johnson", Age: 35, Skills: []string{"C++", "Go"}}
+
+	// Convert all to map[string]interface{}
+	var jsonMap map[string]interface{}
+	json.Unmarshal([]byte(jsonData), &jsonMap)
+
+	bsonMap := mangomatch.ConvertBSON(bsonData).(map[string]interface{})
+
+	structBytes, _ := json.Marshal(structData)
+	var structMap map[string]interface{}
+	json.Unmarshal(structBytes, &structMap)
+
+	// Combine into a single slice
+	allUsers := []map[string]interface{}{jsonMap, bsonMap, structMap}
+
+	// Query for Go programmers over 30
+	query := map[string]interface{}{
+		"age": map[string]interface{}{"$gt": 30},
+		"skills": "Go",
+	}
+
+	// Filter users
+	var matchedUsers []map[string]interface{}
+	for _, user := range allUsers {
+		if mangomatch.Match(query, user) {
+			matchedUsers = append(matchedUsers, user)
+		}
+	}
+
+	// Print results
+	fmt.Printf("Found %d matching users:\n", len(matchedUsers))
+	for _, user := range matchedUsers {
+		fmt.Printf("- %s (age: %v)\n", user["name"], user["age"])
+	}
 }
 ```
 
@@ -596,7 +946,347 @@ This will execute the full test suite and provide a summary of the results.
 - **Edge Computing**: Run complex queries on edge devices with limited resources
 - **Real-time Systems**: Filter high-volume event streams with complex conditions
 
-## ❓ Frequently Asked Questions
+## 🔌 Integration Scenarios
+
+### API Filtering
+
+MangoMatch can be used to implement advanced filtering in REST APIs:
+
+```go
+func GetUsers(w http.ResponseWriter, r *http.Request) {
+    // Parse filter from query string
+    filterStr := r.URL.Query().Get("filter")
+    var filter map[string]interface{}
+    
+    if filterStr != "" {
+        // Parse the JSON filter
+        err := json.Unmarshal([]byte(filterStr), &filter)
+        if err != nil {
+            http.Error(w, "Invalid filter format", http.StatusBadRequest)
+            return
+        }
+    }
+    
+    // Get users from database or cache
+    users := getUsersFromSource()
+    
+    // Apply filter
+    var result []map[string]interface{}
+    for _, user := range users {
+        if filter == nil || mangomatch.Match(filter, user) {
+            result = append(result, user)
+        }
+    }
+    
+    // Return filtered results
+    json.NewEncoder(w).Encode(result)
+}
+```
+
+### Database Caching
+
+Use MangoMatch to query cached MongoDB data:
+
+```go
+func GetCachedData(query map[string]interface{}) ([]interface{}, error) {
+    // Check if we have cached data
+    cachedData, found := cache.Get("users")
+    if !found {
+        // Query database if not in cache
+        client, err := mongo.Connect(context.Background(), options.Client().ApplyURI(mongoURI))
+        if err != nil {
+            return nil, err
+        }
+        defer client.Disconnect(context.Background())
+        
+        collection := client.Database("myapp").Collection("users")
+        cursor, err := collection.Find(context.Background(), bson.M{})
+        if err != nil {
+            return nil, err
+        }
+        
+        var users []map[string]interface{}
+        if err = cursor.All(context.Background(), &users); err != nil {
+            return nil, err
+        }
+        
+        // Store in cache
+        cache.Set("users", users, time.Minute*15)
+        cachedData = users
+    }
+    
+    // Cast to the right type
+    docs := cachedData.([]map[string]interface{})
+    
+    // Apply MangoMatch filtering
+    var results []interface{}
+    for _, doc := range docs {
+        if mangomatch.Match(query, doc) {
+            results = append(results, doc)
+        }
+    }
+    
+    return results, nil
+}
+```
+
+### Event Processing
+
+Filter events in real-time data streams:
+
+```go
+func ProcessEvents(ctx context.Context, stream <-chan map[string]interface{}, filter map[string]interface{}) {
+    for {
+        select {
+        case event := <-stream:
+            // Apply filter to incoming events
+            if mangomatch.Match(filter, event) {
+                // Process matching events
+                processEvent(event)
+            }
+        case <-ctx.Done():
+            return
+        }
+    }
+}
+```
+
+### GraphQL Resolvers
+
+Implement complex filtering in GraphQL resolvers:
+
+```go
+func (r *queryResolver) FilteredUsers(ctx context.Context, filter string) ([]*User, error) {
+    // Parse the filter
+    var filterMap map[string]interface{}
+    if err := json.Unmarshal([]byte(filter), &filterMap); err != nil {
+        return nil, err
+    }
+    
+    // Get all users
+    allUsers := r.UsersStore.GetAll()
+    
+    // Apply filter
+    var result []*User
+    for _, user := range allUsers {
+        // Convert struct to map
+        userMap, err := mangomatch.StructToBsonMap(user)
+        if err != nil {
+            continue
+        }
+        
+        // Apply filter
+        if mangomatch.Match(filterMap, userMap) {
+            result = append(result, user)
+        }
+    }
+    
+    return result, nil
+}
+```
+
+## 🔄 Core Functions
+
+MangoMatch provides the following core functions:
+
+### Match
+
+Evaluates a MongoDB-style query against a document (map[string]interface{}).
+
+```go
+func Match(query map[string]interface{}, document map[string]interface{}) bool
+```
+
+### ConvertBSON
+
+Converts BSON types to compatible Go types.
+
+```go
+func ConvertBSON(val interface{}) interface{}
+```
+
+### MatchBSON
+
+Matches a query against a BSON document (combines ConvertBSON and Match).
+
+```go
+func MatchBSON(query map[string]interface{}, document interface{}) bool
+```
+
+### StructToBsonMap
+
+Converts Go structs to maps using BSON marshaling.
+
+```go
+func StructToBsonMap(data interface{}) (map[string]interface{}, error)
+```
+
+### MapBSON
+
+Converts Go maps and other types to BSON types for MongoDB operations.
+
+```go
+func MapBSON(val interface{}) interface{}
+```
+
+## 🔍 Complete API Reference
+
+| Function | Purpose | Input | Output |
+|----------|---------|-------|--------|
+| `Match` | Evaluate MongoDB-style query | `query map[string]interface{}`, `document map[string]interface{}` | `bool` |
+| `ConvertBSON` | Convert BSON to Go types | `val interface{}` | `interface{}` |
+| `MatchBSON` | Match against BSON document | `query map[string]interface{}`, `document interface{}` | `bool` |
+| `StructToBsonMap` | Convert struct to map | `data interface{}` | `map[string]interface{}`, `error` |
+| `MapBSON` | Convert Go to BSON types | `val interface{}` | `interface{}` |
+
+## 📊 Data Flow Diagram
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │     │                 │
+│   MongoDB       │     │   MangoMatch    │     │   Application   │
+│   Database      │────▶│   Functions     │────▶│   Logic         │
+│                 │     │                 │     │                 │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+        │                       ▲                       │
+        │                       │                       │
+        └───────────────────────┼───────────────────────┘
+                                │
+                  ┌─────────────────────────┐
+                  │                         │
+                  │   In-Memory Document    │
+                  │   Collection            │
+                  │                         │
+                  └─────────────────────────┘
+```
+
+## 🔄 Complete BSON Integration Example
+
+This example demonstrates all BSON-related functions working together:
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	
+	"github.com/The-iyed/mangomatch/pkg/mangomatch"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+type User struct {
+	Name     string   `bson:"name"`
+	Age      int      `bson:"age"`
+	Premium  bool     `bson:"premium"`
+	Skills   []string `bson:"skills"`
+	Address  Address  `bson:"address"`
+}
+
+type Address struct {
+	City    string `bson:"city"`
+	Country string `bson:"country"`
+}
+
+func main() {
+	// 1. Connect to MongoDB
+	client, err := mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb://localhost:27017"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer client.Disconnect(context.Background())
+	
+	collection := client.Database("testdb").Collection("users")
+	
+	// 2. Create a Go struct
+	user := User{
+		Name:    "John Doe",
+		Age:     32,
+		Premium: true,
+		Skills:  []string{"Go", "MongoDB", "Docker"},
+		Address: Address{
+			City:    "San Francisco",
+			Country: "USA",
+		},
+	}
+	
+	// 3. Convert struct to BSON document for MongoDB insertion
+	bsonDoc := mangomatch.MapBSON(user)
+	
+	// 4. Insert into MongoDB
+	_, err = collection.InsertOne(context.Background(), bsonDoc)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// 5. Create a query as a Go map
+	query := map[string]interface{}{
+		"age": map[string]interface{}{"$gt": 30},
+		"skills": "Go",
+		"premium": true,
+	}
+	
+	// 6. Convert query to BSON for MongoDB
+	bsonQuery := mangomatch.MapBSON(query)
+	
+	// 7. Execute MongoDB query
+	cursor, err := collection.Find(context.Background(), bsonQuery)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer cursor.Close(context.Background())
+	
+	// 8. Process results
+	var results []bson.M
+	if err = cursor.All(context.Background(), &results); err != nil {
+		log.Fatal(err)
+	}
+	
+	// 9. Convert BSON results to Go maps for MangoMatch processing
+	for _, result := range results {
+		// Convert BSON to Go types
+		goDoc := mangomatch.ConvertBSON(result)
+		
+		// Use MangoMatch for additional in-memory filtering
+		additionalQuery := map[string]interface{}{
+			"address.city": "San Francisco",
+		}
+		
+		// Direct matching with the converted document
+		if mangomatch.Match(additionalQuery, goDoc.(map[string]interface{})) {
+			fmt.Println("Match found with ConvertBSON and Match")
+		}
+		
+		// Or use the convenience MatchBSON function
+		if mangomatch.MatchBSON(additionalQuery, result) {
+			fmt.Println("Match found with MatchBSON")
+		}
+		
+		// Convert struct to map using StructToBsonMap
+		newUser := User{
+			Name: "Jane Smith",
+			Age:  28,
+			Skills: []string{"Go", "AWS"},
+			Address: Address{
+				City:    "New York",
+				Country: "USA",
+			},
+		}
+		
+		userMap, err := mangomatch.StructToBsonMap(newUser)
+		if err != nil {
+			log.Fatal(err)
+		}
+		
+		fmt.Printf("Converted struct: %+v\n", userMap)
+	}
+}
+```
+
+## 🔄 Frequently Asked Questions
 
 ### Is MangoMatch a database?
 No, MangoMatch is not a database. It's a query matching library that allows you to use MongoDB-style queries against in-memory Go data structures.
